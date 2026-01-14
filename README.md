@@ -2,6 +2,8 @@
 
 Privacy-respecting appointment scheduling for Proton Calendar and any iCalendar-compatible provider.
 
+![Screenshot](https://github.com/dajbelshaw/Scheduler/blob/main/screenshot.png?raw=true)
+
 ### Stack (chosen for MVP)
 
 - **Frontend**: React + Vite + TypeScript + Tailwind CSS

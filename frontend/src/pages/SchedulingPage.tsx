@@ -1,5 +1,5 @@
 import axios from "axios";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
 
 interface PageData {
@@ -33,6 +33,19 @@ export function SchedulingPage() {
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const formRef = useRef<HTMLFormElement>(null);
+
+  // Update page title when page data loads
+  useEffect(() => {
+    if (page) {
+      document.title = `Schedule with ${page.ownerName} - Scheduler`;
+    } else if (error) {
+      document.title = "Link Unavailable - Scheduler";
+    } else {
+      document.title = "Loading... - Scheduler";
+    }
+  }, [page, error]);
 
   useEffect(() => {
     if (!slug) return;
@@ -70,7 +83,6 @@ export function SchedulingPage() {
     });
   };
 
-  // Very simple free/busy daily grid for the next 7 days
   const buildSlots = (): { date: Date; slots: Slot[] }[] => {
     if (!page) return [];
     const out: { date: Date; slots: Slot[] }[] = [];
@@ -89,7 +101,6 @@ export function SchedulingPage() {
         0
       );
       const slots: Slot[] = [];
-      // 9:00 to 17:00
       for (let h = 9; h < 17; h++) {
         const start = new Date(
           day.getFullYear(),
@@ -171,54 +182,114 @@ export function SchedulingPage() {
   };
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-4xl flex-col px-4 py-8">
+    <main
+      id="main-content"
+      className="mx-auto flex min-h-screen max-w-4xl flex-col px-4 py-8"
+    >
+      {/* Loading skeleton */}
       {isLoading && (
-        <p className="text-sm text-slate-300">Loading scheduling page…</p>
-      )}
-
-      {!isLoading && error && (
-        <div className="rounded-xl border border-rose-700/60 bg-rose-950/40 p-4 text-sm text-rose-100">
-          {error}
+        <div aria-busy="true" aria-label="Loading scheduling page">
+          <div className="mb-6 flex flex-col gap-2 md:flex-row md:items-baseline md:justify-between">
+            <div className="flex-1">
+              <div className="skeleton h-8 w-48" />
+              <div className="skeleton mt-2 h-4 w-64" />
+            </div>
+            <div className="skeleton h-4 w-32" />
+          </div>
+          <div className="grid gap-6 md:grid-cols-[2fr,1.4fr]">
+            <div className="card">
+              <div className="skeleton mb-3 h-4 w-40" />
+              <div className="grid gap-3 md:grid-cols-2">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i}>
+                    <div className="skeleton mb-2 h-3 w-16" />
+                    <div className="flex flex-wrap gap-1">
+                      {[...Array(4)].map((_, j) => (
+                        <div key={j} className="skeleton h-8 w-24 rounded-pill" />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="card">
+              <div className="skeleton mb-3 h-5 w-40" />
+              <div className="space-y-3">
+                <div className="skeleton h-10 w-full rounded-input" />
+                <div className="skeleton h-10 w-full rounded-input" />
+                <div className="skeleton h-20 w-full rounded-input" />
+                <div className="skeleton h-11 w-full rounded-input" />
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
+      {/* Error state */}
+      {!isLoading && error && (
+        <div className="alert-error" role="alert">
+          <p className="font-medium">Unable to load scheduling page</p>
+          <p className="mt-1 text-error-text/80">{error}</p>
+        </div>
+      )}
+
+      {/* Main content */}
       {!isLoading && page && (
         <>
           <header className="mb-6 flex flex-col gap-2 md:flex-row md:items-baseline md:justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold text-slate-50">
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-2xl font-semibold text-content">
                 {page.ownerName}
               </h1>
               {page.bio && (
-                <p className="mt-1 text-sm text-slate-300">{page.bio}</p>
+                <p className="mt-1 line-clamp-2 text-sm text-content-muted">
+                  {page.bio}
+                </p>
               )}
             </div>
-            <div className="text-xs text-slate-400">
-              URL expires in{" "}
-              <span className="font-medium text-sky-300">
+            <div className="shrink-0 text-xs text-content-muted">
+              Link expires in{" "}
+              <span className="font-medium text-accent-text">
                 {countdownLabel(page.expiresAt)}
               </span>
             </div>
           </header>
 
-          <section className="grid gap-6 md:grid-cols-[2fr,1.4fr]">
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
-              <div className="mb-3 flex items-center justify-between text-xs text-slate-400">
+          <section
+            className="grid gap-6 md:grid-cols-[2fr,1.4fr]"
+            aria-label="Schedule appointment"
+          >
+            {/* Time slots */}
+            <div
+              className="card"
+              role="region"
+              aria-label="Available time slots"
+            >
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-content-muted">
                 <span>Next 7 days · Free slots</span>
-                <span>Times shown in your browser’s timezone</span>
+                <span>Times in your browser&apos;s timezone</span>
               </div>
-              <div className="grid gap-3 md:grid-cols-2">
+
+              <div
+                className="grid gap-3 md:grid-cols-2"
+                role="listbox"
+                aria-label="Select a time slot"
+              >
                 {buildSlots().map(({ date, slots }) => (
-                  <div key={date.toISOString()}>
-                    <div className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+                  <div
+                    key={date.toISOString()}
+                    role="group"
+                    aria-label={formatDate(date)}
+                  >
+                    <div className="mb-2 text-xs font-medium uppercase tracking-wide text-content-muted">
                       {formatDate(date)}
                     </div>
                     {slots.length === 0 ? (
-                      <div className="rounded-lg border border-slate-800 bg-slate-900/70 px-3 py-2 text-xs text-slate-500">
+                      <div className="rounded-input border border-border-muted bg-surface-elevated/70 px-3 py-2.5 text-xs text-content-subtle">
                         No free slots
                       </div>
                     ) : (
-                      <div className="flex flex-wrap gap-1">
+                      <div className="flex flex-wrap gap-1.5">
                         {slots.map((slot) => {
                           const isSelected =
                             selectedSlot &&
@@ -229,12 +300,20 @@ export function SchedulingPage() {
                             <button
                               key={slot.start.toISOString()}
                               type="button"
-                              onClick={() => setSelectedSlot(slot)}
-                              className={`rounded-full px-3 py-1 text-xs ${
+                              role="option"
+                              aria-selected={isSelected}
+                              onClick={() => {
+                                setSelectedSlot(slot);
+                                formRef.current?.scrollIntoView({
+                                  behavior: "smooth",
+                                  block: "start"
+                                });
+                              }}
+                              className={
                                 isSelected
-                                  ? "bg-sky-500 text-slate-950"
-                                  : "bg-slate-800 text-slate-100 hover:bg-slate-700"
-                              }`}
+                                  ? "slot-pill-selected"
+                                  : "slot-pill-default"
+                              }
                             >
                               {formatTimeRange(slot)}
                             </button>
@@ -245,101 +324,152 @@ export function SchedulingPage() {
                   </div>
                 ))}
               </div>
-              <p className="mt-4 text-xs text-slate-500">
-                This view only shows availability windows, not your actual
-                events or their details.
+
+              <p className="mt-4 text-xs text-content-subtle">
+                Only availability shown — event details remain private.
               </p>
             </div>
 
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-              <h2 className="mb-3 text-sm font-semibold text-slate-100">
+            {/* Request form */}
+            <div className="card">
+              <h2 className="mb-3 text-sm font-semibold text-content">
                 Request an appointment
               </h2>
 
               {selectedSlot ? (
-                <p className="mb-3 text-xs text-slate-300">
-                  Selected time:{" "}
-                  <span className="font-medium text-sky-200">
+                <div className="alert-info mb-3" role="status" aria-live="polite">
+                  Selected:{" "}
+                  <span className="font-medium text-accent-text">
                     {formatDate(selectedSlot.start)} ·{" "}
                     {formatTimeRange(selectedSlot)}
                   </span>
-                </p>
+                </div>
               ) : (
-                <p className="mb-3 text-xs text-slate-400">
-                  Choose an available time slot from the calendar to start.
+                <p className="mb-3 text-xs text-content-muted">
+                  Choose an available time slot to continue.
                 </p>
               )}
 
               {successMessage && (
-                <div className="mb-3 rounded-lg border border-emerald-700/60 bg-emerald-950/40 p-3 text-xs text-emerald-100">
+                <div
+                  className="alert-success mb-3"
+                  role="status"
+                  aria-live="polite"
+                >
                   {successMessage}
                 </div>
               )}
 
               {error && (
-                <div className="mb-3 rounded-lg border border-rose-700/60 bg-rose-950/40 p-3 text-xs text-rose-100">
+                <div
+                  className="alert-error mb-3"
+                  role="alert"
+                  aria-live="assertive"
+                >
                   {error}
                 </div>
               )}
 
-              <form onSubmit={handleSubmit} className="space-y-3">
-                <label className="block text-xs font-medium text-slate-200">
-                  Your name
+              <form ref={formRef} onSubmit={handleSubmit} className="space-y-3">
+                <p className="text-[10px] text-content-subtle">
+                  Fields marked with <span className="text-error">*</span> are
+                  required.
+                </p>
+
+                <div>
+                  <label
+                    htmlFor="requester-name"
+                    className="label required-indicator text-xs"
+                  >
+                    Your name
+                  </label>
                   <input
+                    id="requester-name"
                     type="text"
                     minLength={2}
                     maxLength={100}
                     required
+                    autoComplete="name"
                     value={requesterName}
                     onChange={(e) => setRequesterName(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-50 placeholder-slate-500 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40"
+                    className="input-dark mt-1"
                   />
-                </label>
-                <label className="block text-xs font-medium text-slate-200">
-                  Your email
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="requester-email"
+                    className="label required-indicator text-xs"
+                  >
+                    Your email
+                  </label>
                   <input
+                    id="requester-email"
                     type="email"
                     required
+                    autoComplete="email"
                     value={requesterEmail}
                     onChange={(e) => setRequesterEmail(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-50 placeholder-slate-500 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40"
+                    className="input-dark mt-1"
                   />
-                </label>
-                <label className="block text-xs font-medium text-slate-200">
-                  Reason for meeting
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="reason"
+                    className="label required-indicator text-xs"
+                  >
+                    Reason for meeting
+                  </label>
                   <textarea
+                    id="reason"
                     required
                     minLength={10}
                     maxLength={500}
+                    rows={3}
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-50 placeholder-slate-500 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40"
+                    aria-describedby="reason-count"
+                    className="input-dark mt-1"
                   />
-                  <span className="mt-1 block text-[10px] text-slate-500">
-                    {reason.length}/500 characters
-                  </span>
-                </label>
-                <label className="block text-xs font-medium text-slate-200">
-                  Additional notes (optional)
+                  <p id="reason-count" className="label-hint text-[10px]">
+                    {reason.length}/500 characters (min 10)
+                  </p>
+                </div>
+
+                <div>
+                  <label htmlFor="notes" className="label text-xs">
+                    Additional notes{" "}
+                    <span className="font-normal text-content-subtle">
+                      (optional)
+                    </span>
+                  </label>
                   <textarea
+                    id="notes"
                     maxLength={500}
+                    rows={2}
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-50 placeholder-slate-500 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40"
+                    aria-describedby="notes-count"
+                    className="input-dark mt-1"
                   />
-                  <span className="mt-1 block text-[10px] text-slate-500">
+                  <p id="notes-count" className="label-hint text-[10px]">
                     {notes.length}/500 characters
-                  </span>
-                </label>
+                  </p>
+                </div>
 
                 <button
                   type="submit"
                   disabled={!selectedSlot || isSubmitting}
-                  className="w-full rounded-lg bg-sky-500 px-3 py-2 text-xs font-semibold text-slate-950 shadow hover:bg-sky-400 disabled:opacity-60"
+                  aria-busy={isSubmitting}
+                  aria-disabled={!selectedSlot}
+                  className="btn-primary w-full"
                 >
                   {isSubmitting
                     ? "Sending request..."
-                    : "Send appointment request"}
+                    : !selectedSlot
+                      ? "Select a time slot first"
+                      : "Send appointment request"}
                 </button>
               </form>
             </div>
@@ -349,4 +479,3 @@ export function SchedulingPage() {
     </main>
   );
 }
-

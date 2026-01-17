@@ -2,10 +2,31 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Scheduler</title>
+    <title>Scheduler - Private Calendar Availability Sharing</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Share your calendar availability privately. No sign-up, no tracking. Links expire after 24 hours."
+    />
+    <meta name="theme-color" content="#020617" />
+    <!-- Open Graph / Social -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Scheduler - Private Calendar Sharing" />
+    <meta
+      property="og:description"
+      content="Share your calendar availability privately. No sign-up required."
+    />
+    <meta name="twitter:card" content="summary" />
+    <!-- Favicon placeholder - replace with actual favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📅</text></svg>" />
   </head>
-  <body class="bg-slate-950 text-slate-50">
+  <body>
+    <noscript>
+      <div style="padding: 2rem; text-align: center; color: #e2e8f0;">
+        <h1>JavaScript Required</h1>
+        <p>Please enable JavaScript to use this scheduling application.</p>
+      </div>
+    </noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

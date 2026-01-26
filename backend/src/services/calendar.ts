@@ -91,8 +91,13 @@ export async function fetchAndParseCalendar(
     const event: any = item;
     if (event.type !== "VEVENT") continue;
 
-    // Skip all-day events for now (they have DATE instead of DATETIME)
+    // Skip events without start/end
     if (!event.start || !event.end) continue;
+
+    // Skip events marked as "free" (TRANSP:TRANSPARENT)
+    // Default is OPAQUE (busy) if not specified
+    const transp = event.transp || event.transparency || "OPAQUE";
+    if (transp === "TRANSPARENT") continue;
 
     const eventStart = new Date(event.start);
     const eventEnd = new Date(event.end);

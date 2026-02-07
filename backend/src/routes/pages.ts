@@ -2,14 +2,15 @@ import { Router } from "express";
 import { v4 as uuidv4 } from "uuid";
 import rateLimit from "express-rate-limit";
 import { sendAppointmentRequestEmail } from "../services/email";
-import { validateCalendarUrl, fetchAndParseCalendar } from "../services/calendar";
+import { validateMultipleCalendarUrls, fetchAndParseMultipleCalendars } from "../services/calendar";
 import { pagesStore } from "../store/pagesStore";
 
 export const pagesRouter = Router();
 
 // Types
 interface CreatePageBody {
-  calendarUrl: string;
+  calendarUrl?: string;
+  calendarUrls?: string[];
   ownerName: string;
   ownerEmail: string;
   bio?: string;
@@ -18,7 +19,10 @@ interface CreatePageBody {
   dateRangeDays?: number;
   minNoticeHours?: number;
   includeWeekends?: boolean;
+  expiryHours?: number;
 }
+
+const ALLOWED_EXPIRY_HOURS = [1, 4, 12, 24, 72, 168, 336, 720];
 
 // Rate limiting: protect page creation and request endpoints
 const createPageLimiter = rateLimit({
@@ -94,15 +98,32 @@ function generateSlug(): string {
 pagesRouter.post("/", createPageLimiter, async (req, res) => {
   const body = req.body as CreatePageBody;
 
-  if (!body.calendarUrl || !body.ownerEmail || !body.ownerName) {
+  // Normalize calendarUrl / calendarUrls to a string[]
+  let calendarUrls: string[];
+  if (body.calendarUrls && Array.isArray(body.calendarUrls) && body.calendarUrls.length > 0) {
+    calendarUrls = body.calendarUrls.filter((u) => typeof u === "string" && u.trim().length > 0);
+  } else if (body.calendarUrl && typeof body.calendarUrl === "string" && body.calendarUrl.trim().length > 0) {
+    calendarUrls = [body.calendarUrl];
+  } else {
     return res.status(400).json({ error: "Missing required fields" });
   }
 
-  if (!isValidCalendarUrl(body.calendarUrl)) {
-    return res.status(400).json({
-      error:
-        "The calendar URL is not allowed. Please provide a standard HTTPS iCalendar subscription link."
-    });
+  if (calendarUrls.length === 0 || calendarUrls.length > 5) {
+    return res.status(400).json({ error: "Provide between 1 and 5 calendar URLs." });
+  }
+
+  if (!body.ownerEmail || !body.ownerName) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
+
+  // SSRF check for each URL
+  for (const url of calendarUrls) {
+    if (!isValidCalendarUrl(url)) {
+      return res.status(400).json({
+        error:
+          "One or more calendar URLs are not allowed. Please provide standard HTTPS iCalendar subscription links."
+      });
+    }
   }
 
   // Basic server-side validation for other fields
@@ -123,25 +144,29 @@ pagesRouter.post("/", createPageLimiter, async (req, res) => {
       ? Math.min(body.dateRangeDays, 180)
       : 60;
 
+  // Configurable expiry
+  const ttlHours = body.expiryHours && ALLOWED_EXPIRY_HOURS.includes(body.expiryHours)
+    ? body.expiryHours
+    : 24;
+
   try {
-    // Validate calendar URL and count events
-    const validation = await validateCalendarUrl(body.calendarUrl);
+    // Validate all calendar URLs and count events
+    const validation = await validateMultipleCalendarUrls(calendarUrls);
 
     if (!validation.isValid) {
       return res.status(400).json({
         error:
-          "Could not load or parse your calendar. Please check the ICS URL and try again."
+          "Could not load or parse your calendar(s). Please check the ICS URL(s) and try again."
       });
     }
 
     const slug = generateSlug();
     const now = Date.now();
-    const ttlHours = 24;
     const expiresAt = now + ttlHours * 60 * 60 * 1000;
 
     const page = pagesStore.create({
       slug,
-      calendarUrl: body.calendarUrl,
+      calendarUrls,
       ownerName: body.ownerName,
       ownerEmail: body.ownerEmail,
       bio: body.bio,
@@ -163,7 +188,7 @@ pagesRouter.post("/", createPageLimiter, async (req, res) => {
     // Hide technical details from client
     return res.status(400).json({
       error:
-        "Could not load or parse your calendar. Please check the ICS URL and try again."
+        "Could not load or parse your calendar(s). Please check the ICS URL(s) and try again."
     });
   }
 });
@@ -186,8 +211,8 @@ pagesRouter.get("/:slug", async (req, res) => {
       now.getTime() + (page.dateRangeDays ?? 60) * 24 * 60 * 60 * 1000
     );
 
-    const busySlots = await fetchAndParseCalendar(
-      page.calendarUrl,
+    const busySlots = await fetchAndParseMultipleCalendars(
+      page.calendarUrls,
       now,
       endDate
     );

@@ -14,13 +14,24 @@ const STEP_TITLES = {
   3: "Share Your Link - Scheduler"
 };
 
+const EXPIRY_OPTIONS = [
+  { value: 1, label: "1 hour" },
+  { value: 4, label: "4 hours" },
+  { value: 12, label: "12 hours" },
+  { value: 24, label: "24 hours" },
+  { value: 72, label: "3 days" },
+  { value: 168, label: "7 days" },
+  { value: 336, label: "14 days" },
+  { value: 720, label: "30 days" }
+];
+
 export function HomePage() {
   const navigate = useNavigate();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [calendarUrl, setCalendarUrl] = useState("");
+  const [calendarUrls, setCalendarUrls] = useState<string[]>([""]);
   const [ownerName, setOwnerName] = useState("");
   const [ownerEmail, setOwnerEmail] = useState("");
   const [bio, setBio] = useState("");
@@ -29,6 +40,7 @@ export function HomePage() {
   const [dateRange, setDateRange] = useState(60);
   const [minNotice, setMinNotice] = useState(8);
   const [includeWeekends, setIncludeWeekends] = useState(false);
+  const [expiryHours, setExpiryHours] = useState(24);
 
   const [previewEventCount, setPreviewEventCount] = useState<number | null>(
     null
@@ -43,13 +55,39 @@ export function HomePage() {
     document.title = STEP_TITLES[step];
   }, [step]);
 
+  const updateCalendarUrl = (index: number, value: string) => {
+    setCalendarUrls((prev) => {
+      const next = [...prev];
+      next[index] = value;
+      return next;
+    });
+  };
+
+  const addCalendarUrl = () => {
+    if (calendarUrls.length < 5) {
+      setCalendarUrls((prev) => [...prev, ""]);
+    }
+  };
+
+  const removeCalendarUrl = (index: number) => {
+    if (calendarUrls.length > 1) {
+      setCalendarUrls((prev) => prev.filter((_, i) => i !== index));
+    }
+  };
+
+  const nonEmptyUrls = calendarUrls.filter((u) => u.trim().length > 0);
+
   const handleValidateCalendar = async (e: FormEvent) => {
     e.preventDefault();
+    if (nonEmptyUrls.length === 0) {
+      setError("Please enter at least one calendar URL.");
+      return;
+    }
     setError(null);
     setIsLoading(true);
     try {
       const resp = await axios.post<CreatePageResponse>("/api/pages", {
-        calendarUrl,
+        calendarUrls: nonEmptyUrls,
         ownerName: "Preview",
         ownerEmail: "preview@example.com"
       });
@@ -71,7 +109,7 @@ export function HomePage() {
     setIsLoading(true);
     try {
       const resp = await axios.post<CreatePageResponse>("/api/pages", {
-        calendarUrl,
+        calendarUrls: nonEmptyUrls,
         ownerName,
         ownerEmail,
         bio,
@@ -79,7 +117,8 @@ export function HomePage() {
         bufferMinutes: buffer,
         dateRangeDays: dateRange,
         minNoticeHours: minNotice,
-        includeWeekends
+        includeWeekends,
+        expiryHours
       });
       setCreatedPage(resp.data);
       setStep(3);
@@ -96,9 +135,14 @@ export function HomePage() {
   const countdownLabel = (expiresAt: number) => {
     const ms = expiresAt - Date.now();
     const totalMinutes = Math.max(0, Math.floor(ms / 60000));
-    const hours = Math.floor(totalMinutes / 60);
+    const totalHours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;
-    return `${hours}h ${minutes}m`;
+    if (totalHours >= 24) {
+      const days = Math.floor(totalHours / 24);
+      const hours = totalHours % 24;
+      return `${days}d ${hours}h`;
+    }
+    return `${totalHours}h ${minutes}m`;
   };
 
   const shareUrl = createdPage
@@ -132,7 +176,7 @@ export function HomePage() {
           Share your calendar availability privately
         </h1>
         <p className="mt-3 text-content-muted">
-          No sign-up, no database, no tracking. URLs expire after 24 hours.
+          No sign-up, no database, no tracking. URLs expire on your schedule.
         </p>
       </header>
 
@@ -160,25 +204,47 @@ export function HomePage() {
           </ol>
         </nav>
 
-        {/* Step 1: Calendar URL */}
+        {/* Step 1: Calendar URL(s) */}
         {step === 1 && (
           <form onSubmit={handleValidateCalendar} className="space-y-4">
             <div>
-              <label htmlFor="calendar-url" className="label required-indicator">
-                Calendar subscription URL (ICS/iCal)
+              <label className="label required-indicator">
+                Calendar subscription URL(s) (ICS/iCal)
               </label>
-              <input
-                id="calendar-url"
-                type="url"
-                required
-                autoComplete="url"
-                aria-describedby="calendar-url-hint"
-                placeholder="https://mail.proton.me/api/calendar/v1/..."
-                value={calendarUrl}
-                onChange={(e) => setCalendarUrl(e.target.value)}
-                className="input mt-2"
-              />
-              <p id="calendar-url-hint" className="label-hint mt-2">
+              {calendarUrls.map((url, index) => (
+                <div key={index} className="mt-2 flex items-center gap-2">
+                  <input
+                    type="url"
+                    required={index === 0}
+                    autoComplete="url"
+                    aria-label={`Calendar URL ${index + 1}`}
+                    placeholder="https://mail.proton.me/api/calendar/v1/..."
+                    value={url}
+                    onChange={(e) => updateCalendarUrl(index, e.target.value)}
+                    className="input"
+                  />
+                  {calendarUrls.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeCalendarUrl(index)}
+                      className="shrink-0 text-xs text-content-muted hover:text-error"
+                      aria-label={`Remove calendar URL ${index + 1}`}
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              ))}
+              {calendarUrls.length < 5 && (
+                <button
+                  type="button"
+                  onClick={addCalendarUrl}
+                  className="mt-2 text-xs text-accent-text hover:text-accent-hover"
+                >
+                  + Add another calendar (up to 5)
+                </button>
+              )}
+              <p className="label-hint mt-2">
                 We only read free/busy information. No event details are shown
                 to requesters.
               </p>
@@ -340,17 +406,38 @@ export function HomePage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <input
-                id="include-weekends"
-                type="checkbox"
-                checked={includeWeekends}
-                onChange={(e) => setIncludeWeekends(e.target.checked)}
-                className="h-4 w-4 rounded border-border-muted bg-surface-elevated text-accent-text focus:ring-accent-text"
-              />
-              <label htmlFor="include-weekends" className="label">
-                Include weekends
-              </label>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label htmlFor="expiry" className="label">
+                  Link expiry duration
+                </label>
+                <select
+                  id="expiry"
+                  value={expiryHours}
+                  onChange={(e) => setExpiryHours(Number(e.target.value))}
+                  className="input mt-2"
+                >
+                  {EXPIRY_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-end pb-2.5">
+                <div className="flex items-center gap-3">
+                  <input
+                    id="include-weekends"
+                    type="checkbox"
+                    checked={includeWeekends}
+                    onChange={(e) => setIncludeWeekends(e.target.checked)}
+                    className="h-4 w-4 rounded border-border-muted bg-surface-elevated text-accent-text focus:ring-accent-text"
+                  />
+                  <label htmlFor="include-weekends" className="label">
+                    Include weekends
+                  </label>
+                </div>
+              </div>
             </div>
 
             {error && (
@@ -358,10 +445,6 @@ export function HomePage() {
                 {error}
               </div>
             )}
-
-            <p className="pt-2 text-xs text-content-muted">
-              Link expires in 24 hours. Regenerate daily to keep sharing.
-            </p>
 
             <div className="mt-4 flex items-center justify-between">
               <button

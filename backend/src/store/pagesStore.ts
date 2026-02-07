@@ -1,6 +1,6 @@
 export interface SchedulingPage {
   slug: string;
-  calendarUrl: string;
+  calendarUrls: string[];
   ownerName: string;
   ownerEmail: string;
   bio?: string;

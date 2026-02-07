@@ -16,7 +16,7 @@ export function NotFoundPage() {
         This page doesn&apos;t exist or the link has expired.
       </p>
       <p className="mt-2 text-sm text-content-subtle">
-        Scheduling links expire after 24 hours for privacy.
+        Scheduling links expire after a set duration for privacy.
       </p>
       <Link to="/" className="btn-primary mt-8 px-6 py-3">
         Create a new scheduling page

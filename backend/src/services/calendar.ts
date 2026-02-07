@@ -212,6 +212,22 @@ export async function fetchAndParseCalendar(
 }
 
 /**
+ * Fetches and parses multiple iCalendar feeds, merging and sorting results.
+ */
+export async function fetchAndParseMultipleCalendars(
+  urls: string[],
+  startDate: Date,
+  endDate: Date
+): Promise<BusySlot[]> {
+  const results = await Promise.all(
+    urls.map((url) => fetchAndParseCalendar(url, startDate, endDate))
+  );
+  const merged = results.flat();
+  merged.sort((a, b) => a.start.localeCompare(b.start));
+  return merged;
+}
+
+/**
  * Validates a calendar URL by attempting to fetch and parse it.
  * Returns the number of events found (including expanded recurring events).
  */
@@ -235,4 +251,30 @@ export async function validateCalendarUrl(
       error: err.message || "Unknown error"
     };
   }
+}
+
+/**
+ * Validates multiple calendar URLs. Fails if any URL is invalid.
+ * Returns aggregated event count.
+ */
+export async function validateMultipleCalendarUrls(
+  urls: string[]
+): Promise<{ eventCount: number; isValid: boolean; error?: string }> {
+  const results = await Promise.allSettled(
+    urls.map((url) => validateCalendarUrl(url))
+  );
+
+  let totalEvents = 0;
+  for (let i = 0; i < results.length; i++) {
+    const result = results[i];
+    if (result.status === "rejected") {
+      return { eventCount: 0, isValid: false, error: `Calendar ${i + 1}: ${result.reason}` };
+    }
+    if (!result.value.isValid) {
+      return { eventCount: 0, isValid: false, error: `Calendar ${i + 1}: ${result.value.error}` };
+    }
+    totalEvents += result.value.eventCount;
+  }
+
+  return { eventCount: totalEvents, isValid: true };
 }

@@ -1,6 +1,9 @@
 import axios from "axios";
-import { FormEvent, useEffect, useState, useRef } from "react";
+import { FormEvent, useEffect, useState, useRef, useMemo } from "react";
 import { useParams } from "react-router-dom";
+import { MiniCalendar } from "../components/MiniCalendar";
+import { WeekView } from "../components/WeekView";
+import type { Slot, WeekDayData } from "../components/WeekView";
 
 interface PageData {
   slug: string;
@@ -16,9 +19,19 @@ interface PageData {
   busySlots: { start: string; end: string }[];
 }
 
-interface Slot {
-  start: Date;
-  end: Date;
+function toDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function getMondayOfWeek(d: Date): Date {
+  const day = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const dow = day.getDay();
+  const diff = dow === 0 ? -6 : 1 - dow; // Monday = 1
+  day.setDate(day.getDate() + diff);
+  return day;
 }
 
 export function SchedulingPage() {
@@ -28,6 +41,12 @@ export function SchedulingPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
+  const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() =>
+    getMondayOfWeek(new Date())
+  );
+  const [miniCalMonth, setMiniCalMonth] = useState<Date>(
+    () => new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+  );
 
   const [requesterName, setRequesterName] = useState("");
   const [requesterEmail, setRequesterEmail] = useState("");
@@ -38,7 +57,6 @@ export function SchedulingPage() {
 
   const formRef = useRef<HTMLFormElement>(null);
 
-  // Update page title when page data loads
   useEffect(() => {
     if (page) {
       document.title = `Schedule with ${page.ownerName} - Scheduler`;
@@ -76,74 +94,51 @@ export function SchedulingPage() {
     };
   }, [slug]);
 
-  const isBusy = (start: Date, end: Date) => {
-    if (!page) return false;
-    return page.busySlots.some((slot) => {
-      const s = new Date(slot.start);
-      const e = new Date(slot.end);
-      return s < end && e > start;
-    });
-  };
-
-  const buildSlots = (): { date: Date; slots: Slot[] }[] => {
-    if (!page) return [];
-    const out: { date: Date; slots: Slot[] }[] = [];
+  // Build all slots for the entire date range
+  const allSlots = useMemo<Map<string, Slot[]>>(() => {
+    if (!page) return new Map();
+    const map = new Map<string, Slot[]>();
     const duration = page.defaultDurationMinutes;
+    const buffer = page.bufferMinutes ?? 0;
+    const slotInterval = duration + buffer;
     const now = new Date();
     const minNoticeMs = (page.minNoticeHours ?? 8) * 60 * 60 * 1000;
     const earliestStart = new Date(now.getTime() + minNoticeMs);
     const includeWeekends = page.includeWeekends ?? false;
-    const days = Math.min(7, page.dateRangeDays);
+    const maxDate = new Date(
+      now.getTime() + (page.dateRangeDays ?? 60) * 24 * 60 * 60 * 1000
+    );
 
-    let daysAdded = 0;
+    const isBusy = (start: Date, end: Date) =>
+      page.busySlots.some((slot) => {
+        const s = new Date(slot.start);
+        const e = new Date(slot.end);
+        return s < end && e > start;
+      });
+
     let dayOffset = 0;
-
-    // Loop until we have enough days (up to 14 days out to find 7 weekdays)
-    while (daysAdded < days && dayOffset < 14) {
+    while (dayOffset < (page.dateRangeDays ?? 60) + 14) {
       const day = new Date(
         now.getFullYear(),
         now.getMonth(),
         now.getDate() + dayOffset,
-        0,
-        0,
-        0,
-        0
+        0, 0, 0, 0
       );
+
+      if (day > maxDate) break;
 
       const dayOfWeek = day.getDay();
       const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
-      // Skip weekends if not included
       if (isWeekend && !includeWeekends) {
         dayOffset++;
         continue;
       }
 
       const slots: Slot[] = [];
-      const buffer = page.bufferMinutes ?? 0;
-      const slotInterval = duration + buffer; // Time between slot starts
+      const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 9, 0, 0, 0);
+      const dayEnd = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 17, 0, 0, 0);
 
-      // Start at 9:00, end by 17:00 (5 PM)
-      const dayStart = new Date(
-        day.getFullYear(),
-        day.getMonth(),
-        day.getDate(),
-        9,
-        0,
-        0,
-        0
-      );
-      const dayEnd = new Date(
-        day.getFullYear(),
-        day.getMonth(),
-        day.getDate(),
-        17,
-        0,
-        0,
-        0
-      );
-
-      // Iterate in duration-minute increments
       for (
         let slotStart = dayStart.getTime();
         slotStart + duration * 60000 <= dayEnd.getTime();
@@ -152,20 +147,106 @@ export function SchedulingPage() {
         const start = new Date(slotStart);
         const end = new Date(slotStart + duration * 60000);
 
-        // Skip slots that don't meet minimum notice requirement
-        if (start < earliestStart) {
-          continue;
-        }
-
+        if (start < earliestStart) continue;
         if (!isBusy(start, end)) {
           slots.push({ start, end });
         }
       }
-      out.push({ date: day, slots });
-      daysAdded++;
+
+      map.set(toDateStr(day), slots);
       dayOffset++;
     }
-    return out;
+
+    return map;
+  }, [page]);
+
+  // Dates that have at least one available slot
+  const availableDates = useMemo<Set<string>>(() => {
+    const set = new Set<string>();
+    for (const [dateStr, slots] of allSlots) {
+      if (slots.length > 0) set.add(dateStr);
+    }
+    return set;
+  }, [allSlots]);
+
+  // Current week's days
+  const weekDays = useMemo<WeekDayData[]>(() => {
+    if (!page) return [];
+    const includeWeekends = page.includeWeekends ?? false;
+    const numDays = includeWeekends ? 7 : 5;
+    const days: WeekDayData[] = [];
+
+    for (let i = 0; i < (includeWeekends ? 7 : 7); i++) {
+      const d = new Date(
+        currentWeekStart.getFullYear(),
+        currentWeekStart.getMonth(),
+        currentWeekStart.getDate() + i
+      );
+      const dow = d.getDay();
+      const isWeekend = dow === 0 || dow === 6;
+      if (!includeWeekends && isWeekend) continue;
+
+      const dateStr = toDateStr(d);
+      days.push({
+        date: d,
+        dateStr,
+        slots: allSlots.get(dateStr) ?? []
+      });
+
+      if (days.length >= numDays) break;
+    }
+
+    return days;
+  }, [page, currentWeekStart, allSlots]);
+
+  // Week navigation
+  const thisMonday = getMondayOfWeek(new Date());
+  const maxWeekStart = useMemo(() => {
+    if (!page) return thisMonday;
+    const now = new Date();
+    const maxDate = new Date(
+      now.getTime() + (page.dateRangeDays ?? 60) * 24 * 60 * 60 * 1000
+    );
+    return getMondayOfWeek(maxDate);
+  }, [page]);
+
+  const canGoPrev = currentWeekStart.getTime() > thisMonday.getTime();
+  const canGoNext = currentWeekStart.getTime() < maxWeekStart.getTime();
+
+  const navigateWeek = (direction: -1 | 1) => {
+    setCurrentWeekStart((prev) => {
+      const next = new Date(prev);
+      next.setDate(next.getDate() + direction * 7);
+      if (direction === -1 && next.getTime() < thisMonday.getTime()) return thisMonday;
+      if (direction === 1 && next.getTime() > maxWeekStart.getTime()) return maxWeekStart;
+      return next;
+    });
+  };
+
+  const handleMiniCalSelect = (dateStr: string) => {
+    const [y, m, d] = dateStr.split("-").map(Number);
+    const date = new Date(y, m - 1, d);
+    const monday = getMondayOfWeek(date);
+    // Clamp
+    if (monday.getTime() < thisMonday.getTime()) {
+      setCurrentWeekStart(thisMonday);
+    } else if (monday.getTime() > maxWeekStart.getTime()) {
+      setCurrentWeekStart(maxWeekStart);
+    } else {
+      setCurrentWeekStart(monday);
+    }
+  };
+
+  // Sync mini calendar month when week changes
+  useEffect(() => {
+    setMiniCalMonth(
+      new Date(currentWeekStart.getFullYear(), currentWeekStart.getMonth(), 1)
+    );
+  }, [currentWeekStart]);
+
+  const handleSlotSelect = (slot: Slot) => {
+    setSelectedSlot(slot);
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -223,15 +304,23 @@ export function SchedulingPage() {
   const countdownLabel = (expiresAt: number) => {
     const ms = expiresAt - Date.now();
     const totalMinutes = Math.max(0, Math.floor(ms / 60000));
-    const hours = Math.floor(totalMinutes / 60);
+    const totalHours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;
-    return `${hours}h ${minutes}m`;
+    if (totalHours >= 24) {
+      const days = Math.floor(totalHours / 24);
+      const hours = totalHours % 24;
+      return `${days}d ${hours}h`;
+    }
+    return `${totalHours}h ${minutes}m`;
   };
+
+  // Selected date string for mini calendar highlighting
+  const selectedDateStr = selectedSlot ? toDateStr(selectedSlot.start) : null;
 
   return (
     <main
       id="main-content"
-      className="mx-auto flex min-h-screen max-w-4xl flex-col px-4 py-8"
+      className="mx-auto flex min-h-screen max-w-7xl flex-col px-4 py-8"
     >
       {/* Loading skeleton */}
       {isLoading && (
@@ -243,19 +332,22 @@ export function SchedulingPage() {
             </div>
             <div className="skeleton h-4 w-32" />
           </div>
-          <div className="grid gap-6 md:grid-cols-[2fr,1.4fr]">
+          <div className="grid gap-6 md:grid-cols-[220px,1fr] lg:grid-cols-[220px,1fr,340px]">
+            <div className="hidden md:block">
+              <div className="card">
+                <div className="skeleton mb-3 h-6 w-32" />
+                <div className="grid grid-cols-7 gap-1">
+                  {[...Array(35)].map((_, i) => (
+                    <div key={i} className="skeleton h-8 w-8 rounded-full" />
+                  ))}
+                </div>
+              </div>
+            </div>
             <div className="card">
               <div className="skeleton mb-3 h-4 w-40" />
-              <div className="grid gap-3 md:grid-cols-2">
-                {[...Array(4)].map((_, i) => (
-                  <div key={i}>
-                    <div className="skeleton mb-2 h-3 w-16" />
-                    <div className="flex flex-wrap gap-1">
-                      {[...Array(4)].map((_, j) => (
-                        <div key={j} className="skeleton h-8 w-24 rounded-pill" />
-                      ))}
-                    </div>
-                  </div>
+              <div className="grid grid-cols-6 gap-2">
+                {[...Array(30)].map((_, i) => (
+                  <div key={i} className="skeleton h-10 rounded" />
                 ))}
               </div>
             </div>
@@ -273,7 +365,7 @@ export function SchedulingPage() {
       )}
 
       {/* Error state */}
-      {!isLoading && error && (
+      {!isLoading && error && !page && (
         <div className="alert-error" role="alert">
           <p className="font-medium">Unable to load scheduling page</p>
           <p className="mt-1 text-error-text/80">{error}</p>
@@ -303,82 +395,53 @@ export function SchedulingPage() {
           </header>
 
           <section
-            className="grid gap-6 md:grid-cols-[2fr,1.4fr]"
+            className="grid gap-6 md:grid-cols-[220px,1fr] lg:grid-cols-[220px,1fr,340px]"
             aria-label="Schedule appointment"
           >
-            {/* Time slots */}
-            <div
-              className="card"
-              role="region"
-              aria-label="Available time slots"
-            >
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-content-muted">
-                <span>Next 7 days · Free slots</span>
-                <span>Times in your browser&apos;s timezone</span>
+            {/* Left: Mini Calendar (hidden on mobile) */}
+            <div className="hidden md:block">
+              <div className="card">
+                <MiniCalendar
+                  displayMonth={miniCalMonth}
+                  availableDates={availableDates}
+                  selectedDate={selectedDateStr}
+                  onSelectDate={handleMiniCalSelect}
+                  onPrevMonth={() =>
+                    setMiniCalMonth(
+                      (prev) =>
+                        new Date(prev.getFullYear(), prev.getMonth() - 1, 1)
+                    )
+                  }
+                  onNextMonth={() =>
+                    setMiniCalMonth(
+                      (prev) =>
+                        new Date(prev.getFullYear(), prev.getMonth() + 1, 1)
+                    )
+                  }
+                />
               </div>
-
-              <div
-                className="grid gap-3 md:grid-cols-2"
-                role="listbox"
-                aria-label="Select a time slot"
-              >
-                {buildSlots().map(({ date, slots }) => (
-                  <div
-                    key={date.toISOString()}
-                    role="group"
-                    aria-label={formatDate(date)}
-                  >
-                    <div className="mb-2 text-xs font-medium uppercase tracking-wide text-content-muted">
-                      {formatDate(date)}
-                    </div>
-                    {slots.length === 0 ? (
-                      <div className="rounded-input border border-border-muted bg-surface-elevated/70 px-3 py-2.5 text-xs text-content-subtle">
-                        No free slots
-                      </div>
-                    ) : (
-                      <div className="flex flex-wrap gap-1.5">
-                        {slots.map((slot) => {
-                          const isSelected =
-                            !!selectedSlot &&
-                            selectedSlot.start.getTime() ===
-                              slot.start.getTime() &&
-                            selectedSlot.end.getTime() === slot.end.getTime();
-                          return (
-                            <button
-                              key={slot.start.toISOString()}
-                              type="button"
-                              role="option"
-                              aria-selected={isSelected}
-                              onClick={() => {
-                                setSelectedSlot(slot);
-                                formRef.current?.scrollIntoView({
-                                  behavior: "smooth",
-                                  block: "start"
-                                });
-                              }}
-                              className={
-                                isSelected
-                                  ? "slot-pill-selected"
-                                  : "slot-pill-default"
-                              }
-                            >
-                              {formatTimeRange(slot)}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              <p className="mt-4 text-xs text-content-subtle">
-                Only availability shown — event details remain private.
-              </p>
             </div>
 
-            {/* Request form */}
-            <div className="card">
+            {/* Center: Week View */}
+            <div className="card" role="region" aria-label="Available time slots">
+              <WeekView
+                weekStart={currentWeekStart}
+                onPrevWeek={() => navigateWeek(-1)}
+                onNextWeek={() => navigateWeek(1)}
+                canGoPrev={canGoPrev}
+                canGoNext={canGoNext}
+                weekDays={weekDays}
+                selectedSlot={selectedSlot}
+                onSelectSlot={handleSlotSelect}
+                startHour={9}
+                endHour={17}
+                durationMinutes={page.defaultDurationMinutes}
+                bufferMinutes={page.bufferMinutes}
+              />
+            </div>
+
+            {/* Right: Request form */}
+            <div className="card md:col-span-2 lg:col-span-1">
               <h2 className="mb-3 text-sm font-semibold text-content">
                 Request an appointment
               </h2>

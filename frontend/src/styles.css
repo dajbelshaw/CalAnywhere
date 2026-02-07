@@ -144,6 +144,61 @@
     @apply alert border-accent/40 bg-accent-muted/30 text-content-muted;
   }
 
+  /* Week view cells */
+  .week-cell {
+    @apply flex min-h-touch items-center justify-center text-xs;
+  }
+
+  .week-cell-available {
+    @apply week-cell cursor-pointer text-accent-text transition-colors hover:bg-accent/10;
+  }
+
+  .week-cell-selected {
+    @apply week-cell cursor-pointer bg-accent text-content-inverse;
+  }
+
+  .week-cell-busy {
+    @apply week-cell text-content-subtle;
+  }
+
+  .week-header-cell {
+    @apply text-center text-[10px] font-medium uppercase tracking-wider text-content-muted;
+  }
+
+  .week-time-label {
+    @apply pr-2 text-right text-[10px] text-content-subtle;
+  }
+
+  .week-nav-btn {
+    @apply inline-flex h-8 w-8 items-center justify-center rounded-input text-content-muted transition-colors hover:bg-surface-overlay hover:text-content;
+    @apply focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent;
+  }
+
+  /* Mini calendar cells */
+  .mini-cal-cell {
+    @apply flex h-8 w-8 items-center justify-center rounded-full text-xs;
+  }
+
+  .mini-cal-available {
+    @apply mini-cal-cell cursor-pointer text-accent-text hover:bg-accent/10;
+  }
+
+  .mini-cal-unavailable {
+    @apply mini-cal-cell text-content-subtle;
+  }
+
+  .mini-cal-selected {
+    @apply mini-cal-cell cursor-pointer bg-accent text-content-inverse;
+  }
+
+  .mini-cal-outside {
+    @apply mini-cal-cell text-content-subtle/40;
+  }
+
+  .mini-cal-dot {
+    @apply mx-auto mt-0.5 h-1 w-1 rounded-full bg-accent;
+  }
+
   /* Loading skeleton */
   .skeleton {
     @apply animate-pulse rounded bg-surface-overlay;

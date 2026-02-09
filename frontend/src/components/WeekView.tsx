@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 
 export interface Slot {
   start: Date;
@@ -84,102 +84,225 @@ export function WeekView({
     selectedSlot.start.getTime() === slot.start.getTime() &&
     selectedSlot.end.getTime() === slot.end.getTime();
 
+  // Mobile: single-day view state
+  const [mobileDayIndex, setMobileDayIndex] = useState(0);
+  const mobileDay = weekDays[mobileDayIndex] ?? weekDays[0];
+
+  const canMobilePrev = mobileDayIndex > 0 || canGoPrev;
+  const canMobileNext = mobileDayIndex < weekDays.length - 1 || canGoNext;
+
+  const handleMobilePrev = () => {
+    if (mobileDayIndex > 0) {
+      setMobileDayIndex(mobileDayIndex - 1);
+    } else if (canGoPrev) {
+      onPrevWeek();
+      setMobileDayIndex(weekDays.length - 1);
+    }
+  };
+
+  const handleMobileNext = () => {
+    if (mobileDayIndex < weekDays.length - 1) {
+      setMobileDayIndex(mobileDayIndex + 1);
+    } else if (canGoNext) {
+      onNextWeek();
+      setMobileDayIndex(0);
+    }
+  };
+
+  const formatMobileDate = (d: Date) =>
+    d.toLocaleDateString(undefined, {
+      weekday: "long",
+      month: "short",
+      day: "numeric"
+    });
+
   return (
     <div>
-      {/* Header */}
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-1">
+      {/* ===== MOBILE: Single-day view (< md) ===== */}
+      <div className="md:hidden">
+        {/* Mobile day navigation */}
+        <div className="mb-4 flex items-center justify-between gap-2">
           <button
             type="button"
-            onClick={onPrevWeek}
-            disabled={!canGoPrev}
+            onClick={handleMobilePrev}
+            disabled={!canMobilePrev}
             className="week-nav-btn disabled:opacity-30"
-            aria-label="Previous week"
+            aria-label="Previous day"
           >
             ‹
           </button>
+          <div className="text-center">
+            <span className="text-sm font-medium text-content">
+              {mobileDay ? formatMobileDate(mobileDay.date) : ""}
+            </span>
+            <div className="text-xs text-content-subtle">{timezone}</div>
+          </div>
           <button
             type="button"
-            onClick={onNextWeek}
-            disabled={!canGoNext}
+            onClick={handleMobileNext}
+            disabled={!canMobileNext}
             className="week-nav-btn disabled:opacity-30"
-            aria-label="Next week"
+            aria-label="Next day"
           >
             ›
           </button>
-          <span className="ml-2 text-sm font-medium text-content">
-            {formatWeekRange(_weekStart, weekDays)}
-          </span>
         </div>
-        <span className="text-xs text-content-subtle">{timezone}</span>
-      </div>
 
-      {/* Grid */}
-      <div className="overflow-x-auto">
-        <div
-          className="grid"
-          style={{
-            gridTemplateColumns: `60px repeat(${numCols}, minmax(72px, 1fr))`
-          }}
-        >
-          {/* Column headers */}
-          <div /> {/* Empty top-left corner */}
-          {weekDays.map((day) => {
-            const dow = day.date.toLocaleDateString(undefined, { weekday: "short" }).toUpperCase();
-            const dayNum = day.date.getDate();
+        {/* Mobile day tabs — scroll horizontally through current week */}
+        <div className="mb-3 flex gap-1 overflow-x-auto pb-1" role="tablist" aria-label="Days of the week">
+          {weekDays.map((day, i) => {
+            const dow = day.date.toLocaleDateString(undefined, { weekday: "short" });
+            const isActive = i === mobileDayIndex;
             return (
-              <div key={day.dateStr} className="week-header-cell pb-2">
-                <div>{dow}</div>
-                <div className="text-sm font-semibold text-content">{dayNum}</div>
-              </div>
+              <button
+                key={day.dateStr}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => setMobileDayIndex(i)}
+                className={`flex shrink-0 flex-col items-center rounded-input px-3 py-1.5 text-xs transition-colors ${
+                  isActive
+                    ? "bg-accent text-content-inverse"
+                    : day.slots.length > 0
+                      ? "text-accent-text hover:bg-surface-overlay"
+                      : "text-content-subtle"
+                }`}
+              >
+                <span className="font-medium">{dow}</span>
+                <span className={isActive ? "font-semibold" : ""}>{day.date.getDate()}</span>
+              </button>
             );
           })}
-
-          {/* Time rows */}
-          {timeRows.map((row) => (
-            <Fragment key={`row-${row.label}`}>
-              {/* Time label */}
-              <div
-                className="week-time-label flex items-center justify-end"
-              >
-                {row.label}
-              </div>
-
-              {/* Day cells */}
-              {weekDays.map((day) => {
-                const key = `${day.dateStr}|${row.label}`;
-                const slot = slotMap.get(key);
-
-                if (slot) {
-                  const sel = isSelected(slot);
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => onSelectSlot(slot)}
-                      className={sel ? "week-cell-selected" : "week-cell-available"}
-                      aria-label={`${day.date.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} at ${row.label}, available`}
-                      aria-pressed={sel}
-                    >
-                      {row.label}
-                    </button>
-                  );
-                }
-
-                return (
-                  <div key={key} className="week-cell-busy" role="img" aria-label="Busy">
-                    <span aria-hidden="true">—</span>
-                  </div>
-                );
-              })}
-            </Fragment>
-          ))}
         </div>
+
+        {/* Mobile slot list */}
+        {mobileDay && mobileDay.slots.length > 0 ? (
+          <div className="grid grid-cols-2 gap-2" role="tabpanel">
+            {mobileDay.slots.map((slot) => {
+              const sel = isSelected(slot);
+              const timeLabel = padTime(slot.start.getHours(), slot.start.getMinutes());
+              return (
+                <button
+                  key={slot.start.toISOString()}
+                  type="button"
+                  onClick={() => onSelectSlot(slot)}
+                  className={sel ? "slot-pill-selected" : "slot-pill-default"}
+                  aria-label={`${formatMobileDate(mobileDay.date)} at ${timeLabel}, available`}
+                  aria-pressed={sel}
+                >
+                  {timeLabel}
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="py-6 text-center text-sm text-content-muted">
+            No available slots on this day.
+          </p>
+        )}
+
+        <p className="mt-3 text-xs text-content-subtle">
+          Only availability shown — event details remain private.
+        </p>
       </div>
 
-      <p className="mt-3 text-xs text-content-subtle">
-        Only availability shown — event details remain private.
-      </p>
+      {/* ===== DESKTOP: Week grid view (>= md) ===== */}
+      <div className="hidden md:block">
+        {/* Header */}
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={onPrevWeek}
+              disabled={!canGoPrev}
+              className="week-nav-btn disabled:opacity-30"
+              aria-label="Previous week"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              onClick={onNextWeek}
+              disabled={!canGoNext}
+              className="week-nav-btn disabled:opacity-30"
+              aria-label="Next week"
+            >
+              ›
+            </button>
+            <span className="ml-2 text-sm font-medium text-content">
+              {formatWeekRange(_weekStart, weekDays)}
+            </span>
+          </div>
+          <span className="text-xs text-content-subtle">{timezone}</span>
+        </div>
+
+        {/* Grid */}
+        <div className="overflow-x-auto">
+          <div
+            className="grid"
+            style={{
+              gridTemplateColumns: `60px repeat(${numCols}, minmax(72px, 1fr))`
+            }}
+          >
+            {/* Column headers */}
+            <div /> {/* Empty top-left corner */}
+            {weekDays.map((day) => {
+              const dow = day.date.toLocaleDateString(undefined, { weekday: "short" }).toUpperCase();
+              const dayNum = day.date.getDate();
+              return (
+                <div key={day.dateStr} className="week-header-cell pb-2">
+                  <div>{dow}</div>
+                  <div className="text-sm font-semibold text-content">{dayNum}</div>
+                </div>
+              );
+            })}
+
+            {/* Time rows */}
+            {timeRows.map((row) => (
+              <Fragment key={`row-${row.label}`}>
+                {/* Time label */}
+                <div
+                  className="week-time-label flex items-center justify-end"
+                >
+                  {row.label}
+                </div>
+
+                {/* Day cells */}
+                {weekDays.map((day) => {
+                  const key = `${day.dateStr}|${row.label}`;
+                  const slot = slotMap.get(key);
+
+                  if (slot) {
+                    const sel = isSelected(slot);
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => onSelectSlot(slot)}
+                        className={sel ? "week-cell-selected" : "week-cell-available"}
+                        aria-label={`${day.date.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} at ${row.label}, available`}
+                        aria-pressed={sel}
+                      >
+                        {row.label}
+                      </button>
+                    );
+                  }
+
+                  return (
+                    <div key={key} className="week-cell-busy" role="img" aria-label="Busy">
+                      <span aria-hidden="true">—</span>
+                    </div>
+                  );
+                })}
+              </Fragment>
+            ))}
+          </div>
+        </div>
+
+        <p className="mt-3 text-xs text-content-subtle">
+          Only availability shown — event details remain private.
+        </p>
+      </div>
     </div>
   );
 }

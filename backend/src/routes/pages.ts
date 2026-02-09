@@ -44,7 +44,7 @@ const confirmLimiter = rateLimit({
 // Basic email format validation (no external dependency)
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// Basic calendar URL validation to mitigate SSRF
+// Calendar URL validation to mitigate SSRF
 function isValidCalendarUrl(rawUrl: string): boolean {
   if (!rawUrl || rawUrl.length > 4096) return false;
   let url: URL;
@@ -61,40 +61,58 @@ function isValidCalendarUrl(rawUrl: string): boolean {
 
   const hostname = url.hostname.toLowerCase();
 
-  // Block obvious local/loopback hosts
+  // Block if hostname is an IP address (IPv4 or IPv6) — only allow real domain names.
+  // This prevents octal/hex/decimal bypass tricks (0177.0.0.1, 0x7f000001, etc.)
+  // and all IPv6 private ranges in one check.
+  if (isIpAddress(hostname)) {
+    return false;
+  }
+
+  // Block obvious local hostnames
   if (
     hostname === "localhost" ||
-    hostname === "127.0.0.1" ||
-    hostname === "::1"
+    hostname.endsWith(".local") ||
+    hostname.endsWith(".internal") ||
+    hostname.endsWith(".localhost")
   ) {
     return false;
   }
 
-  // Block common private IPv4 ranges by prefix
-  if (
-    hostname.startsWith("10.") ||
-    hostname.startsWith("192.168.") ||
-    hostname.startsWith("172.16.") ||
-    hostname.startsWith("172.17.") ||
-    hostname.startsWith("172.18.") ||
-    hostname.startsWith("172.19.") ||
-    hostname.startsWith("172.20.") ||
-    hostname.startsWith("172.21.") ||
-    hostname.startsWith("172.22.") ||
-    hostname.startsWith("172.23.") ||
-    hostname.startsWith("172.24.") ||
-    hostname.startsWith("172.25.") ||
-    hostname.startsWith("172.26.") ||
-    hostname.startsWith("172.27.") ||
-    hostname.startsWith("172.28.") ||
-    hostname.startsWith("172.29.") ||
-    hostname.startsWith("172.30.") ||
-    hostname.startsWith("172.31.")
-  ) {
+  // Require at least one dot (blocks bare hostnames like "metadata")
+  if (!hostname.includes(".")) {
     return false;
   }
 
   return true;
+}
+
+// Check if a hostname looks like an IP address (v4 or v6)
+function isIpAddress(hostname: string): boolean {
+  // IPv6 (including bracketed form from URL parsing)
+  if (hostname.startsWith("[") || hostname.includes(":")) {
+    return true;
+  }
+  // IPv4 — standard dotted decimal, but also octal (0177.0.0.1) or hex (0x7f.0.0.1)
+  // If every segment between dots is numeric (decimal, octal, or hex), treat as IP
+  const parts = hostname.split(".");
+  if (parts.length === 4 && parts.every((p) => /^(0x[0-9a-f]+|0[0-7]*|[1-9]\d*)$/i.test(p))) {
+    return true;
+  }
+  // Single large decimal/hex number (e.g. 2130706433 = 127.0.0.1)
+  if (/^(0x[0-9a-f]+|\d+)$/i.test(hostname)) {
+    return true;
+  }
+  return false;
+}
+
+// Escape user-supplied strings before interpolating into HTML
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 // Helper to generate cryptographically strong slug
@@ -102,6 +120,48 @@ function generateSlug(): string {
   // uuid without dashes is 32 chars; we can truncate to 22 for a compact, unguessable slug
   return uuidv4().replace(/-/g, "").slice(0, 22);
 }
+
+// POST /api/pages/validate - validate calendar URLs without creating a page
+pagesRouter.post("/validate", createPageLimiter, async (req, res) => {
+  const body = req.body as { calendarUrls?: string[]; calendarUrl?: string };
+
+  let calendarUrls: string[];
+  if (body.calendarUrls && Array.isArray(body.calendarUrls) && body.calendarUrls.length > 0) {
+    calendarUrls = body.calendarUrls.filter((u) => typeof u === "string" && u.trim().length > 0);
+  } else if (body.calendarUrl && typeof body.calendarUrl === "string" && body.calendarUrl.trim().length > 0) {
+    calendarUrls = [body.calendarUrl];
+  } else {
+    return res.status(400).json({ error: "Please provide at least one calendar URL." });
+  }
+
+  if (calendarUrls.length === 0 || calendarUrls.length > 5) {
+    return res.status(400).json({ error: "Provide between 1 and 5 calendar URLs." });
+  }
+
+  for (const url of calendarUrls) {
+    if (!isValidCalendarUrl(url)) {
+      return res.status(400).json({
+        error: "One or more calendar URLs are not allowed. Please provide standard HTTPS iCalendar subscription links."
+      });
+    }
+  }
+
+  try {
+    const validation = await validateMultipleCalendarUrls(calendarUrls);
+
+    if (!validation.isValid) {
+      return res.status(400).json({
+        error: "Could not load or parse your calendar(s). Please check the ICS URL(s) and try again."
+      });
+    }
+
+    return res.json({ eventCount: validation.eventCount });
+  } catch {
+    return res.status(400).json({
+      error: "Could not load or parse your calendar(s). Please check the ICS URL(s) and try again."
+    });
+  }
+});
 
 // POST /api/pages - create a new scheduling page
 pagesRouter.post("/", createPageLimiter, async (req, res) => {
@@ -229,7 +289,6 @@ pagesRouter.get("/:slug", async (req, res) => {
     return res.json({
       slug: page.slug,
       ownerName: page.ownerName,
-      ownerEmail: page.ownerEmail,
       bio: page.bio,
       defaultDurationMinutes: page.defaultDurationMinutes,
       bufferMinutes: page.bufferMinutes,
@@ -388,7 +447,7 @@ h1{font-size:1.25rem;margin:0 0 .75rem}p{color:#D8DEE9;font-size:.875rem;margin:
 
     pendingRequestsStore.delete(token);
 
-    const ownerFirst = page.ownerName.split(" ")[0];
+    const ownerFirst = escapeHtml(page.ownerName.split(" ")[0]);
 
     return res.status(200).contentType("text/html").send(`<!DOCTYPE html>
 <html lang="en">

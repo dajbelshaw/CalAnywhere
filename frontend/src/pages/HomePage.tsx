@@ -49,6 +49,14 @@ export function HomePage() {
     null
   );
   const [copySuccess, setCopySuccess] = useState(false);
+  const [, setTick] = useState(0);
+
+  // Re-render every 60s so the countdown label stays fresh
+  useEffect(() => {
+    if (step !== 3 || !createdPage) return;
+    const id = setInterval(() => setTick((t) => t + 1), 60_000);
+    return () => clearInterval(id);
+  }, [step, createdPage]);
 
   // Update page title based on step
   useEffect(() => {
@@ -86,10 +94,8 @@ export function HomePage() {
     setError(null);
     setIsLoading(true);
     try {
-      const resp = await axios.post<CreatePageResponse>("/api/pages", {
-        calendarUrls: nonEmptyUrls,
-        ownerName: "Preview",
-        ownerEmail: "preview@example.com"
+      const resp = await axios.post<{ eventCount: number }>("/api/pages/validate", {
+        calendarUrls: nonEmptyUrls
       });
       setPreviewEventCount(resp.data.eventCount);
       setStep(2);

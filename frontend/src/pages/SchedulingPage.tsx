@@ -1,5 +1,5 @@
 import axios from "axios";
-import { FormEvent, useEffect, useState, useRef, useMemo } from "react";
+import { FormEvent, useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { MiniCalendar } from "../components/MiniCalendar";
 import { WeekView } from "../components/WeekView";
@@ -8,7 +8,6 @@ import type { Slot, WeekDayData } from "../components/WeekView";
 interface PageData {
   slug: string;
   ownerName: string;
-  ownerEmail: string;
   bio?: string;
   defaultDurationMinutes: number;
   bufferMinutes: number;
@@ -53,11 +52,19 @@ export function SchedulingPage() {
   const [reason, setReason] = useState("");
   const [notes, setNotes] = useState("");
   const [website, setWebsite] = useState(""); // honeypot
+  const [miniCalOpen, setMiniCalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [verificationSent, setVerificationSent] = useState(false);
+  const [, setTick] = useState(0);
 
   const formRef = useRef<HTMLFormElement>(null);
+
+  // Re-render every 60s so the countdown label stays fresh
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     if (page) {
@@ -407,28 +414,45 @@ export function SchedulingPage() {
             className="grid gap-6 md:grid-cols-[220px,1fr] lg:grid-cols-[220px,1fr,340px]"
             aria-label="Schedule appointment"
           >
-            {/* Left: Mini Calendar (hidden on mobile) */}
-            <div className="hidden md:block">
+            {/* Left: Mini Calendar — collapsible on mobile, always visible on desktop */}
+            <div>
               <div className="card">
-                <h2 className="sr-only">Month calendar</h2>
-                <MiniCalendar
-                  displayMonth={miniCalMonth}
-                  availableDates={availableDates}
-                  selectedDate={selectedDateStr}
-                  onSelectDate={handleMiniCalSelect}
-                  onPrevMonth={() =>
-                    setMiniCalMonth(
-                      (prev) =>
-                        new Date(prev.getFullYear(), prev.getMonth() - 1, 1)
-                    )
-                  }
-                  onNextMonth={() =>
-                    setMiniCalMonth(
-                      (prev) =>
-                        new Date(prev.getFullYear(), prev.getMonth() + 1, 1)
-                    )
-                  }
-                />
+                <div className="flex items-center justify-between md:hidden">
+                  <h2 className="text-xs font-semibold text-content">Jump to date</h2>
+                  <button
+                    type="button"
+                    onClick={() => setMiniCalOpen((v) => !v)}
+                    className="text-xs text-accent-text hover:text-accent-hover"
+                    aria-expanded={miniCalOpen}
+                    aria-controls="mini-cal-panel"
+                  >
+                    {miniCalOpen ? "Hide" : "Show calendar"}
+                  </button>
+                </div>
+                <div
+                  id="mini-cal-panel"
+                  className={`${miniCalOpen ? "mt-3" : "hidden"} md:mt-0 md:block`}
+                >
+                  <h2 className="sr-only">Month calendar</h2>
+                  <MiniCalendar
+                    displayMonth={miniCalMonth}
+                    availableDates={availableDates}
+                    selectedDate={selectedDateStr}
+                    onSelectDate={handleMiniCalSelect}
+                    onPrevMonth={() =>
+                      setMiniCalMonth(
+                        (prev) =>
+                          new Date(prev.getFullYear(), prev.getMonth() - 1, 1)
+                      )
+                    }
+                    onNextMonth={() =>
+                      setMiniCalMonth(
+                        (prev) =>
+                          new Date(prev.getFullYear(), prev.getMonth() + 1, 1)
+                        )
+                    }
+                  />
+                </div>
               </div>
             </div>
 

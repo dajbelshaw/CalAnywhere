@@ -57,7 +57,7 @@ export async function sendVerificationEmail(
     `- From: ${start.toISOString()}${tzLabel}`,
     `- To:   ${end.toISOString()}${tzLabel}\n`,
     `This link expires in 1 hour. If you did not make this request, you can safely ignore this email.\n`,
-    `— Scheduler`
+    `— CalAnywhere`
   ];
 
   const text = bodyLines.join("\n");
@@ -105,7 +105,7 @@ export async function sendAppointmentRequestEmail(
   const subject = `Appointment Request: ${payload.requesterName} - ${start.toISOString()}${tzLabel}`;
 
   const bodyLines = [
-    `You have received a new appointment request via Scheduler.\n`,
+    `You have received a new appointment request via CalAnywhere.\n`,
     `CALENDAR OWNER`,
     `- Name: ${ownerName}`,
     `- Email: ${ownerEmail}\n`,
@@ -124,7 +124,7 @@ export async function sendAppointmentRequestEmail(
     `- Create an event in your calendar for the agreed slot.`,
     `- Reply directly to the requester at ${payload.requesterEmail} to confirm or propose alternatives.\n`,
     `ABOUT THIS EMAIL`,
-    `This request was sent via Scheduler. No event has been created automatically; you remain in full control of your calendar.\n`,
+    `This request was sent via CalAnywhere. No event has been created automatically; you remain in full control of your calendar.\n`,
     `If you no longer wish to receive requests via this link, simply stop sharing it or generate a new link.`
   ];
 

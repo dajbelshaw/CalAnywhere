@@ -9,9 +9,9 @@ interface CreatePageResponse {
 }
 
 const STEP_TITLES = {
-  1: "Enter Calendar URL - Scheduler",
-  2: "Your Details - Scheduler",
-  3: "Share Your Link - Scheduler"
+  1: "Enter Calendar URL - CalAnywhere",
+  2: "Your Details - CalAnywhere",
+  3: "Share Your Link - CalAnywhere"
 };
 
 const EXPIRY_OPTIONS = [
@@ -180,7 +180,7 @@ export function HomePage() {
         </p>
         <p className="mt-4 text-sm text-content-muted">
           Paste one or more calendar links from any provider — Google, Outlook,
-          Proton, Apple, or anything that offers an ICS feed — and Scheduler
+          Proton, Apple, or anything that offers an ICS feed — and CalAnywhere
           creates a temporary page showing only when you're free. Ideal for
           freelancers juggling multiple clients, educators with split
           timetables, or anyone who wants to offer appointment slots without

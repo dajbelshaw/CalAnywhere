@@ -3,6 +3,8 @@ import cors from "cors";
 import helmet from "helmet";
 import { json } from "body-parser";
 import { pagesRouter } from "./routes/pages";
+import { initDatabase } from "./db/client";
+import { runMigrations } from "./db/migrate";
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -38,7 +40,23 @@ app.use((_req, res) => {
   res.status(404).json({ error: "Not found" });
 });
 
-app.listen(port, () => {
-  // eslint-disable-next-line no-console
-  console.log(`Scheduler backend listening on port ${port}`);
-});
+async function start() {
+  try {
+    const hasDb = await initDatabase();
+    if (hasDb) {
+      await runMigrations();
+    }
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("Database initialisation failed:", err);
+    // eslint-disable-next-line no-console
+    console.log("Falling back to ephemeral in-memory mode.");
+  }
+
+  app.listen(port, () => {
+    // eslint-disable-next-line no-console
+    console.log(`CalAnywhere backend listening on port ${port}`);
+  });
+}
+
+start();

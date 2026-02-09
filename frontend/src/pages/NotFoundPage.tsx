@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 
 export function NotFoundPage() {
   useEffect(() => {
-    document.title = "Page Not Found - Scheduler";
+    document.title = "Page Not Found - CalAnywhere";
   }, []);
 
   return (

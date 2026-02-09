@@ -353,7 +353,7 @@ pagesRouter.get("/:slug/requests/:token/confirm", confirmLimiter, async (req, re
   if (!pending || pending.slug !== slug) {
     return res.status(200).contentType("text/html").send(`<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Link Expired - Scheduler</title>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Link Expired - CalAnywhere</title>
 <style>body{font-family:system-ui,sans-serif;background:#5E81AC;color:#ECEFF4;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:1rem}
 .card{max-width:28rem;text-align:center;background:#3B4252;border:1px solid #4C566A;border-radius:1rem;padding:2rem;box-shadow:0 4px 6px rgba(0,0,0,.3)}
 h1{font-size:1.25rem;margin:0 0 .75rem}p{color:#D8DEE9;font-size:.875rem;margin:0}</style></head>
@@ -366,7 +366,7 @@ h1{font-size:1.25rem;margin:0 0 .75rem}p{color:#D8DEE9;font-size:.875rem;margin:
     pendingRequestsStore.delete(token);
     return res.status(200).contentType("text/html").send(`<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Page Expired - Scheduler</title>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Page Expired - CalAnywhere</title>
 <style>body{font-family:system-ui,sans-serif;background:#5E81AC;color:#ECEFF4;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:1rem}
 .card{max-width:28rem;text-align:center;background:#3B4252;border:1px solid #4C566A;border-radius:1rem;padding:2rem;box-shadow:0 4px 6px rgba(0,0,0,.3)}
 h1{font-size:1.25rem;margin:0 0 .75rem}p{color:#D8DEE9;font-size:.875rem;margin:0}</style></head>
@@ -392,7 +392,7 @@ h1{font-size:1.25rem;margin:0 0 .75rem}p{color:#D8DEE9;font-size:.875rem;margin:
 
     return res.status(200).contentType("text/html").send(`<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Request Confirmed - Scheduler</title>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Request Confirmed - CalAnywhere</title>
 <style>body{font-family:system-ui,sans-serif;background:#5E81AC;color:#ECEFF4;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:1rem}
 .card{max-width:28rem;text-align:center;background:#3B4252;border:1px solid #4C566A;border-radius:1rem;padding:2rem;box-shadow:0 4px 6px rgba(0,0,0,.3)}
 h1{font-size:1.25rem;margin:0 0 .75rem;color:#A3BE8C}p{color:#D8DEE9;font-size:.875rem;margin:0}</style></head>
@@ -400,7 +400,7 @@ h1{font-size:1.25rem;margin:0 0 .75rem;color:#A3BE8C}p{color:#D8DEE9;font-size:.
   } catch (_err) {
     return res.status(502).contentType("text/html").send(`<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Error - Scheduler</title>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Error - CalAnywhere</title>
 <style>body{font-family:system-ui,sans-serif;background:#5E81AC;color:#ECEFF4;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:1rem}
 .card{max-width:28rem;text-align:center;background:#3B4252;border:1px solid #4C566A;border-radius:1rem;padding:2rem;box-shadow:0 4px 6px rgba(0,0,0,.3)}
 h1{font-size:1.25rem;margin:0 0 .75rem;color:#DBA8AD}p{color:#D8DEE9;font-size:.875rem;margin:0}</style></head>

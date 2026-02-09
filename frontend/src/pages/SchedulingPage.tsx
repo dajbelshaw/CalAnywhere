@@ -61,11 +61,11 @@ export function SchedulingPage() {
 
   useEffect(() => {
     if (page) {
-      document.title = `Schedule with ${page.ownerName} - Scheduler`;
+      document.title = `Schedule with ${page.ownerName} - CalAnywhere`;
     } else if (error) {
-      document.title = "Link Unavailable - Scheduler";
+      document.title = "Link Unavailable - CalAnywhere";
     } else {
-      document.title = "Loading... - Scheduler";
+      document.title = "Loading... - CalAnywhere";
     }
   }, [page, error]);
 

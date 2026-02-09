@@ -1,5 +1,5 @@
 {
-  "name": "scheduler-backend",
+  "name": "calanywhere-backend",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -15,6 +15,7 @@
     "express-rate-limit": "^7.4.0",
     "helmet": "^7.2.0",
     "node-ical": "^0.23.1",
+    "pg": "^8.18.0",
     "rrule": "^2.8.1",
     "uuid": "^9.0.1"
   },
@@ -23,6 +24,7 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^4.17.25",
     "@types/node": "^22.19.6",
+    "@types/pg": "^8.16.0",
     "@types/uuid": "^9.0.8",
     "nodemon": "^3.0.0",
     "ts-node": "^10.9.2",

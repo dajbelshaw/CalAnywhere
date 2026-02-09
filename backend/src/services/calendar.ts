@@ -83,7 +83,7 @@ export async function fetchAndParseCalendar(
   const response = await axios.get(calendarUrl, {
     timeout: 5000,
     headers: {
-      "User-Agent": "ProtonScheduler/1.0"
+      "User-Agent": "CalAnywhere/1.0"
     }
   });
 

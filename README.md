@@ -1,6 +1,6 @@
-## CalAnywhere Cloud
-
 ![CalAnywhere logo](https://github.com/dynamicskillset/CalAnywhere/blob/main/calanywhere.jpg?raw=true)
+
+## CalAnywhere Cloud
 
 The managed hosting platform for [CalAnywhere](https://github.com/dajbelshaw/Scheduler), the privacy-first scheduling tool for any calendar.
 

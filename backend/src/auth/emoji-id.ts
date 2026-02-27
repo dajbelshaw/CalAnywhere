@@ -2,7 +2,7 @@ import { EMOJI_ALPHABET, ID_LENGTH } from './emoji-alphabet';
 import { Pool } from 'pg';
 
 /**
- * Generates a random Emoji ID (4 emoji from the curated alphabet).
+ * Generates a random Emoji ID (3 emoji from the curated alphabet).
  * Does not guarantee uniqueness — call generateUniqueEmojiId for that.
  */
 export function generateEmojiId(): string {

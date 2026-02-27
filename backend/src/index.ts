@@ -57,7 +57,7 @@ async function start() {
   // Auth routes — only available when a database is connected
   const pool = getPool();
   if (pool) {
-    app.use("/auth", createAuthRouter(pool));
+    app.use("/api/auth", createAuthRouter(pool));
   }
 
   // 404 handler must come after all route registrations

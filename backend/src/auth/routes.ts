@@ -3,10 +3,11 @@ import { Pool } from 'pg';
 import axios from 'axios';
 import rateLimit from 'express-rate-limit';
 
-import { generateUniqueEmojiId, isValidEmojiId, isEmojiIdTaken } from './emoji-id';
+import { generateEmojiId, generateUniqueEmojiId, isValidEmojiId, isEmojiIdTaken } from './emoji-id';
 import { hashIcalUrl, verifyIcalUrl, isPlausibleIcalUrl } from './credentials';
 import { generateRecoveryCodes, storeRecoveryCodes, consumeRecoveryCode, remainingRecoveryCodes } from './recovery';
 import { createSession, validateSession, deleteSession } from './session';
+import { isSafeToFetch } from './url-validation';
 
 const COOKIE_NAME = 'ca_session';
 const COOKIE_OPTIONS = {
@@ -23,17 +24,58 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const signupLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5, // 5 signups per IP per hour
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many accounts created from this address. Please try again later.' },
+});
+
 export function createAuthRouter(pool: Pool): Router {
   const router = Router();
 
   /**
-   * GET /auth/suggest
-   * Returns a suggested unique Emoji ID for the signup form.
+   * GET /auth/suggest?count=N
+   * Returns one or more suggested unique Emoji IDs for the signup form.
+   * count defaults to 1, max 5. Deduplicates within the batch.
    */
-  router.get('/suggest', async (_req: Request, res: Response) => {
+  router.get('/suggest', async (req: Request, res: Response) => {
+    const raw = parseInt(req.query.count as string, 10);
+    const count = Number.isFinite(raw) && raw >= 1 ? Math.min(raw, 5) : 1;
+
     try {
-      const emojiId = await generateUniqueEmojiId(pool);
-      res.json({ emojiId });
+      const suggestions: string[] = [];
+      const seen = new Set<string>();
+      const maxAttempts = count * 10; // generous retry budget
+      let attempts = 0;
+
+      while (suggestions.length < count && attempts < maxAttempts) {
+        attempts++;
+        const id = generateEmojiId();
+        if (seen.has(id)) continue;
+
+        // Check database uniqueness
+        const { rows } = await pool.query(
+          'SELECT 1 FROM users WHERE emoji_id = $1',
+          [id]
+        );
+        if (rows.length === 0) {
+          seen.add(id);
+          suggestions.push(id);
+        }
+      }
+
+      if (suggestions.length === 0) {
+        return res.status(503).json({ error: 'Could not generate Emoji ID' });
+      }
+
+      // Return single string for count=1 (backwards compatible), array otherwise
+      if (count === 1) {
+        res.json({ emojiId: suggestions[0] });
+      } else {
+        res.json({ suggestions });
+      }
     } catch (err) {
       res.status(503).json({ error: 'Could not generate Emoji ID' });
     }
@@ -43,11 +85,16 @@ export function createAuthRouter(pool: Pool): Router {
    * POST /auth/signup
    * Body: { emojiId?: string, icalUrl: string }
    */
-  router.post('/signup', async (req: Request, res: Response) => {
-    const { emojiId: requestedId, icalUrl } = req.body;
+  router.post('/signup', signupLimiter, async (req: Request, res: Response) => {
+    const { emojiId: requestedId } = req.body;
+    const icalUrl = typeof req.body.icalUrl === 'string' ? req.body.icalUrl.trim() : req.body.icalUrl;
 
     if (!icalUrl || !isPlausibleIcalUrl(icalUrl)) {
       return res.status(400).json({ error: 'Invalid iCal URL' });
+    }
+
+    if (!(await isSafeToFetch(icalUrl))) {
+      return res.status(400).json({ error: 'URL is not allowed' });
     }
 
     try {
@@ -107,7 +154,8 @@ export function createAuthRouter(pool: Pool): Router {
    * Body: { emojiId: string, icalUrl: string }
    */
   router.post('/signin', authLimiter, async (req: Request, res: Response) => {
-    const { emojiId, icalUrl } = req.body;
+    const emojiId = typeof req.body.emojiId === 'string' ? req.body.emojiId.trim() : req.body.emojiId;
+    const icalUrl = typeof req.body.icalUrl === 'string' ? req.body.icalUrl.trim() : req.body.icalUrl;
 
     if (!emojiId || !icalUrl) {
       return res.status(400).json({ error: 'Emoji ID and iCal URL are required' });
@@ -144,7 +192,9 @@ export function createAuthRouter(pool: Pool): Router {
    * Body: { emojiId: string, recoveryCode: string, newIcalUrl?: string }
    */
   router.post('/recover', authLimiter, async (req: Request, res: Response) => {
-    const { emojiId, recoveryCode, newIcalUrl } = req.body;
+    const emojiId = typeof req.body.emojiId === 'string' ? req.body.emojiId.trim() : req.body.emojiId;
+    const recoveryCode = typeof req.body.recoveryCode === 'string' ? req.body.recoveryCode.trim() : req.body.recoveryCode;
+    const newIcalUrl = typeof req.body.newIcalUrl === 'string' ? req.body.newIcalUrl.trim() : req.body.newIcalUrl;
 
     if (!emojiId || !recoveryCode) {
       return res.status(400).json({ error: 'Emoji ID and recovery code are required' });

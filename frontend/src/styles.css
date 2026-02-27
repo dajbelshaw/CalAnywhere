@@ -269,6 +269,11 @@
     @apply text-error;
   }
 
+  /* Emoji spacing — subtle letter-spacing for emoji sequences */
+  .emoji-spaced {
+    letter-spacing: 0.1em;
+  }
+
   /* Text overflow utilities */
   .text-truncate {
     @apply overflow-hidden text-ellipsis whitespace-nowrap;

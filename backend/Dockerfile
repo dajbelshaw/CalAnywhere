@@ -6,6 +6,8 @@ RUN npm ci
 COPY tsconfig.json ./
 COPY src ./src
 RUN npm run build
+# Copy SQL migration files (tsc only compiles .ts, not .sql)
+RUN cp -r src/db/migrations dist/db/migrations
 
 # Stage 2: Production
 FROM node:20-alpine

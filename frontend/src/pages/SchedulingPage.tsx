@@ -19,6 +19,11 @@ interface PageData {
   busySlots: { start: string; end: string }[];
 }
 
+interface ExpiredInfo {
+  ownerName: string;
+  expiredAt: string;
+}
+
 function getMondayOfWeek(d: Date): Date {
   const day = new Date(d.getFullYear(), d.getMonth(), d.getDate());
   const dow = day.getDay();
@@ -30,6 +35,7 @@ function getMondayOfWeek(d: Date): Date {
 export function SchedulingPage() {
   const { slug } = useParams<{ slug: string }>();
   const [page, setPage] = useState<PageData | null>(null);
+  const [expired, setExpired] = useState<ExpiredInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -63,12 +69,14 @@ export function SchedulingPage() {
   useEffect(() => {
     if (page) {
       document.title = `Schedule with ${page.ownerName} - CalAnywhere`;
+    } else if (expired) {
+      document.title = "Page No Longer Active - CalAnywhere";
     } else if (error) {
       document.title = "Link Unavailable - CalAnywhere";
     } else {
       document.title = "Loading... - CalAnywhere";
     }
-  }, [page, error]);
+  }, [page, expired, error]);
 
   useEffect(() => {
     if (!slug) return;
@@ -82,6 +90,14 @@ export function SchedulingPage() {
       })
       .catch((err) => {
         if (!isMounted) return;
+        // Handle expired pages (HTTP 410)
+        if (err?.response?.status === 410 && err?.response?.data?.expired) {
+          setExpired({
+            ownerName: err.response.data.ownerName,
+            expiredAt: err.response.data.expiredAt,
+          });
+          return;
+        }
         setError(
           err?.response?.data?.error ??
             "This scheduling link is not available. It may have expired."
@@ -358,8 +374,23 @@ export function SchedulingPage() {
         </div>
       )}
 
+      {/* Expired page */}
+      {!isLoading && expired && (
+        <div className="flex flex-1 items-center justify-center">
+          <div className="card mx-auto max-w-md py-12 text-center">
+            <h1 className="text-xl font-semibold text-content">
+              This scheduling page is no longer active
+            </h1>
+            <p className="mt-3 text-sm text-content-muted">
+              {expired.ownerName}&rsquo;s scheduling link has expired and is no
+              longer accepting appointment requests.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Error state */}
-      {!isLoading && error && !page && (
+      {!isLoading && error && !page && !expired && (
         <div className="alert-error" role="alert">
           <p className="font-medium">Unable to load scheduling page</p>
           <p className="mt-1 text-error-text/80">{error}</p>
@@ -367,7 +398,7 @@ export function SchedulingPage() {
       )}
 
       {/* Main content */}
-      {!isLoading && page && (
+      {!isLoading && !expired && page && (
         <>
           <header className="mb-6 flex flex-col gap-2 md:flex-row md:items-baseline md:justify-between">
             <div className="min-w-0 flex-1">

@@ -4,6 +4,7 @@ import rateLimit from "express-rate-limit";
 import { sendAppointmentRequestEmail, sendVerificationEmail } from "../services/email";
 import { pagesStore, pendingRequestsStore, bookingsStore } from "../store";
 import { validateMultipleCalendarUrls, fetchAndParseMultipleCalendars } from "../services/calendar";
+import { getPool } from "../db/client";
 
 export const pagesRouter = Router();
 
@@ -267,8 +268,23 @@ pagesRouter.get("/:slug", async (req, res) => {
   const page = await pagesStore.get(slug);
 
   if (!page) {
+    // Check if the page exists but is expired (PostgreSQL only)
+    const pool = getPool();
+    if (pool) {
+      const { rows } = await pool.query(
+        `SELECT owner_name, expires_at FROM scheduling_pages WHERE slug = $1`,
+        [slug]
+      );
+      if (rows.length > 0) {
+        return res.status(410).json({
+          expired: true,
+          ownerName: rows[0].owner_name,
+          expiredAt: rows[0].expires_at,
+        });
+      }
+    }
     return res.status(404).json({
-      error: "This scheduling link has expired or does not exist."
+      error: "This scheduling page does not exist."
     });
   }
 
